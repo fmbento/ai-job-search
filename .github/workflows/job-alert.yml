@@ -63,8 +63,9 @@ concurrency:
 jobs:
   alert:
     name: Priority-1 keyword alert
-    # This is a personal, fork-local alert driven by fmbento's keyword file -
-    # keep it off the upstream template, same guard pattern as upstream-watch.
+    # This is a personal, fork-local alert driven by the fork owner's keyword
+    # file - keep it off the upstream template, same guard pattern as
+    # upstream-watch.
     if: github.repository != 'MadsLorentzen/ai-job-search'
     runs-on: ubuntu-latest
     timeout-minutes: 10
