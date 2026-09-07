@@ -1,0 +1,108 @@
+# Daily Priority-1 job alert. Reports only - it NEVER edits files, pushes,
+# or applies to anything.
+#
+# Each morning it reads two sources with the same keyword file:
+# the Real Work From Anywhere category pages (the same seven pages the
+# realworkfromanywhere-search CLI scrapes) and the MoAIJobs RSS feed (the
+# complete board in one request, as the moaijobs-search CLI). Postings that
+# match tools/job_alert_keywords.txt (Priority 1 of the search-queries file)
+# within the last MAX_AGE_DAYS are commented on one rolling issue, "Job alert
+# - Priority 1 matches", when not already reported. State is the issue's own
+# comment history, so there is no cache to commit and no pushes; the alert
+# reaches the repo owner as a normal GitHub notification. Same report/act
+# boundary and posture as upstream-watch.yml (which this workflow mirrors).
+#
+# Every daily comment also embeds a hidden machine-readable counts payload
+# (JSON inside an HTML comment - invisible when rendered, readable via the
+# API). On Sundays a second schedule entry runs the same script with
+# --weekly: it folds the past 7 days of payloads into one trend comment
+# (new matches per board, per category, per day) posted on the same issue.
+#
+# Token is the built-in GITHUB_TOKEN scoped to this repo: it can open/update
+# the alert issue and nothing else. The script fails with exit 1 when the
+# portal returns zero parseable postings - a fully green run on a markup
+# change would be the silent death of the alert, so it must be loud instead.
+#
+# Tuning: MAX_AGE_DAYS below (how fresh a posting must be to count as NEW),
+# and tools/job_alert_keywords.txt (the terms). Test a change with
+# `workflow_dispatch` and `dry_run: true` - that prints the would-be comment
+# to the run log and touches nothing.
+
+name: Job alert
+
+on:
+  schedule:
+    - cron: "0 7 * * *" # 07:00 UTC daily (~08:00 Lisbon in summer, 07:00 winter)
+    - cron: "20 7 * * 0" # Sundays 07:20 UTC: weekly trend summary (after the daily sweep)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "daily sweep, or weekly trend summary"
+        type: choice
+        options:
+          - daily
+          - weekly
+        default: daily
+      dry_run:
+        description: "Print the would-be comment to the log; do not comment"
+        type: boolean
+        default: false
+      max_age_days:
+        description: "Postings newer than this many days count as NEW (daily mode only)"
+        type: number
+        default: 3
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: job-alert
+  cancel-in-progress: false
+
+jobs:
+  alert:
+    name: Priority-1 keyword alert
+    # This is a personal, fork-local alert driven by fmbento's keyword file -
+    # keep it off the upstream template, same guard pattern as upstream-watch.
+    if: github.repository != 'MadsLorentzen/ai-job-search'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Sweep the board and comment new Priority-1 matches
+        env:
+          # Built-in token, this repo only: can write the alert issue, cannot
+          # push code or write anywhere else.
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          MAX_AGE_DAYS: ${{ inputs.max_age_days || 3 }}
+          DRY_RUN: ${{ inputs.dry_run == true }}
+          # Scheduled runs carry no inputs: Sundays (cron "20 7 * * 0") run
+          # the weekly trend summary, every other morning the daily sweep.
+          IS_SUNDAY: ${{ github.event.schedule == '20 7 * * 0' }}
+          MODE: ${{ inputs.mode || 'daily' }}
+        run: |
+          if [ "$MODE" = "weekly" ] || [ "$IS_SUNDAY" = "true" ]; then
+            ARGS=(--weekly --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}")
+          else
+            ARGS=(--run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}")
+            if [ "$MAX_AGE_DAYS" != "3" ]; then
+              ARGS+=(--max-age-days "$MAX_AGE_DAYS")
+            fi
+          fi
+          if [ "$DRY_RUN" = "true" ]; then
+            ARGS+=(--dry-run)
+            echo "### Dry run - would-be comment" >> "$GITHUB_STEP_SUMMARY"
+            echo '```markdown' >> "$GITHUB_STEP_SUMMARY"
+            python tools/job_alert.py "${ARGS[@]}" >> "$GITHUB_STEP_SUMMARY" 2>dry_run.err
+            cat dry_run.err >&2
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            python tools/job_alert.py "${ARGS[@]}"
+          fi

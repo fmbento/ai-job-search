@@ -1,0 +1,37 @@
+# Priority 1 keywords for the daily job alert (tools/job_alert.py).
+# Source: .claude/skills/job-scraper/search-queries.md -> "Priority 1: Applied AI,
+# Research Software, and AI-enabled Digital Transformation".
+#
+# One term per line; lines starting with # are ignored. Matching is
+# case-insensitive with word boundaries over each listing's title, skill tags,
+# and company name (so "llm" hits an "LLM Engineer" title and an "llm" tag,
+# but "ai" never matches inside "email" or "maintain").
+#
+# The alert reads two boards with these same terms: realworkfromanywhere.com
+# (fully-remote worldwide) and moaijobs.com (AI-only, via its RSS feed). Both
+# are English-only, so terms are English; the profile's Portuguese variants
+# rarely appear there. Optional per-term location tags: append "| us-only" or "| anywhere" to
+# a line to pin the label the alert shows for postings matching that
+# term (us-only = US-located or US-remote; anywhere = not US-only).
+# Without a tag the label is derived: Real Work From Anywhere postings
+# are worldwide-remote by board policy, MoAIJobs ones are judged from
+# the RSS "Location:" field (US city, US state, or "REMOTE- US" ->
+# US-only). Tags are triage hints, never filters - nothing is excluded.
+#
+# Edit freely and re-run the workflow (Actions -> Job
+# alert -> Run workflow) to apply.
+
+applied ai
+research software engineer
+ai solutions architect
+machine learning engineer
+ml engineer
+llm
+rag
+ai technical lead
+research engineer
+digital humanities | anywhere
+cultural heritage | anywhere
+ai product engineer
+ai training
+artificial intelligence

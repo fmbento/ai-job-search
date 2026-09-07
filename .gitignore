@@ -116,3 +116,10 @@ company_research/*.json
 
 # Brainstorm mockups (superpowers visual companion) - never ship
 .superpowers/
+
+# Local-only candidate contact data (public fork: tracked files carry placeholders)
+/profile.local.md
+
+# Local working notes (match reports, personal docs at documents root)
+/documents/*.md
+/job_matches_*.md
