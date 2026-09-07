@@ -968,7 +968,7 @@ def main(argv: list[str] | None = None) -> int:
         comment = render_comment(args.run_url, "DRY RUN", fresh, [], backlog,
                                  bootstrapped=False, notes=notes)
         sys.stdout.write(comment)
-        print(f"[dry run] {len(cards)} postings scanned, {len(terms)} keywords: "
+        print(f"[dry run] {len(cards)} postings scanned, {len(entries)} keywords: "
               f"fresh={len(fresh)} backlog={len(backlog)} "
               f"notes={len(notes)}", file=sys.stderr)
         return 0

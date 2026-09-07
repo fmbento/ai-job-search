@@ -101,9 +101,14 @@ jobs:
             ARGS+=(--dry-run)
             echo "### Dry run - would-be comment" >> "$GITHUB_STEP_SUMMARY"
             echo '```markdown' >> "$GITHUB_STEP_SUMMARY"
-            python tools/job_alert.py "${ARGS[@]}" >> "$GITHUB_STEP_SUMMARY" 2>dry_run.err
-            cat dry_run.err >&2
+            # stderr is captured so a crash still shows the traceback: with
+            # plain `set -e`, a failing python line would kill the step before
+            # `cat dry_run.err` ever ran, hiding the real error from the log.
+            status=0
+            python tools/job_alert.py "${ARGS[@]}" >> "$GITHUB_STEP_SUMMARY" 2>dry_run.err || status=$?
             echo '```' >> "$GITHUB_STEP_SUMMARY"
+            if [ -s dry_run.err ]; then cat dry_run.err >&2; fi
+            exit $status
           else
             python tools/job_alert.py "${ARGS[@]}"
           fi
