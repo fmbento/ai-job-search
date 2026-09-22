@@ -13,6 +13,321 @@ per-file diff commands.
 
 ## [Unreleased]
 
+### Added
+
+- **Real Excel workbook integration tests for the salary converter**
+  (`tests/test_convert_salary_excel_integration.py`, `.github/workflows/ci.yml`) -
+  generate temporary `.xlsx` files and invoke the documented converter CLI,
+  checking multiple worksheets, metadata options, Unicode text, localized
+  numbers, and compatibility with salary lookup. A workbook without salary
+  headers must fail without creating an output file. CI installs `openpyxl`
+  across the Python matrix; local runs without this optional dependency skip
+  the two integration cases while retaining the existing dependency-free tests.
+
+- **`documents/projects/` portfolio ingestion in `/setup` (Path A)** (`documents/README.md`,
+  `.claude/commands/setup.md`, `.claude/commands/reset.md`, `tests/test_setup_command.py`) -
+  onboards project writeups, case studies, and documentation (`.md`, `.txt`, `.pdf`)
+  from `documents/projects/`, extracting structured summaries (problem domain, tech stack,
+  technical challenges, and measurable outcomes) to populate `## Independent Projects`
+  in `01-candidate-profile.md`.
+
+- **Source host verification in `/apply` Step 1** (#431, `.claude/commands/apply.md`,
+  `tests/test_apply_host_check.py`) - before proceeding to draft CV and cover letters,
+  Step 1 verifies the posting URL's provenance against installed portal boards and the
+  six standard ATS apex domains (`greenhouse.io`, `lever.co`, `myworkdayjobs.com`/`workday.com`,
+  `ashbyhq.com`, `smartrecruiters.com`, `workable.com`). Look-alike prefix/suffix spoofing
+  fails closed, and unrecognized hosts are plainly flagged as unverified in the evaluation
+  output (`⚠ Unverified source host: <hostname>`) before drafting tokens are spent.
+
+- **`/expand` project and portfolio expansion** (`.claude/commands/expand.md`,
+  `tests/test_expand_command.py`) - expands candidate discovery
+  to technical projects from public GitHub repositories, extracting structured summaries
+  (problem domain, tech stack, key technical challenges, and verifiable outcomes) to
+  populate the `## Independent Projects` section of `01-candidate-profile.md`.
+
+- **Stale sweep branch in `/outcome`** (`.claude/commands/outcome.md`,
+  `tests/test_outcome_stale.py`) - introduces `/outcome stale [N]` (and `/outcome sweep [N]`)
+  to batch-resolve open applications quiet for 60+ (or N) days. Displays a numbered summary
+  of qualifying applications, requires explicit user confirmation (`all`, `select`, or `skip`),
+  resolves confirmed rows to `no_response`, logs dated entries to `notes`, updates archive
+  `outcome.md` files, and hands off to calibration when 3+ applications are resolved.
+
+- **Mechanical layout verification for compiled PDFs** - `tools/verify_layout.py` measures
+  what `/apply` Step 5b previously only eyeballed: per-page text extent, bottom whitespace,
+  the largest internal vertical gap, footer collisions, and entry headers or section
+  headings stranded at a page break. It exists for a failure that survives every existing
+  check - a moderncv `\cventry` is an unbreakable `tabular`, so an entry that does not fit
+  jumps to the next page and leaves a hole behind (observed at 273pt, roughly 19 blank
+  lines) while the document still compiles, still reports the correct page count, and still
+  passes `tools/verify_pdf.py`. Geometry comes from Poppler `pdftotext -bbox`; Poppler is
+  optional repo-wide (since #369 `verify_pdf.py` prefers pypdf), and word bounding boxes
+  have no pypdf equivalent, so this is the one step that still wants it. A missing Poppler
+  - or the xpdf-based `pdftotext` Git for Windows puts ahead of it in PATH, which rejects
+  `-bbox` - degrades to a `skipped:` exit 2 rather than reporting a phantom layout failure.
+  Page count is deliberately left to `verify_pdf.py --pages` so that one rule keeps one
+  implementation. Thresholds are calibrated for the stock moderncv and `cover.cls`
+  geometry. Tests use synthetic page geometry, so they need neither Poppler nor a
+  LaTeX toolchain.
+
+### Changed
+
+- **`/add-template` keeps a registered template's intermediates in `build/`**
+  (#473, `.claude/commands/add-template.md`, `.gitignore`,
+  `tests/test_add_template_build_dir.py`) - the elicited compile command
+  now redirects intermediates (`.aux`, `.log`, ...) to a `build/` folder beside the source
+  and moves the PDF back, so Step 4's test-compile cleanup deletes one folder instead of
+  enumerating LaTeX extensions. The LaTeX command deletes the previous PDF first, so a
+  failed compile leaves no stale PDF for `/apply` to inspect. Toolchains with nothing to
+  redirect (`typst compile`) keep their command unchanged. The `ACTIVE-TEMPLATE` block now
+  tells `/apply` to run the command from the output directory and to delete `build/` in
+  its Step 5e cleanup. Stock templates are unchanged.
+
+### Fixed
+
+- **`/rank` tracker matching preserves Unicode company and role names**
+  (`tools/rank_state.py`, `tests/test_rank_state.py`) - ASCII-only normalization
+  collapsed distinct non-Latin roles to the same empty value and dropped
+  entirely non-Latin companies from tracker exclusions. Match using Unicode
+  case folding and NFC normalization, retaining letters, numbers, and combining
+  marks while continuing to ignore punctuation and spacing. CLI regressions
+  use the standard tracker header and cover distinct names, tracked matches,
+  equivalent accent encodings, and the existing ASCII matching behavior.
+
+- **The Python tools no longer crash on Windows when a posting, company, CV line or file
+  name falls outside the ANSI code page** (`tools/rank_state.py`, `tools/job_key.py`,
+  `tools/verify_pdf.py`, `tools/verify_layout.py`, `tools/convert_salary_excel.py`,
+  `salary_lookup.py`, `tests/test_tools_utf8_output.py`) - a piped stdout on Windows
+  defaults to the ANSI code page (cp1252 on most Western installs), and that is how Claude
+  Code runs every tool. `/rank`'s candidate listing printed titles and companies with
+  `ensure_ascii=False`, so a single Cyrillic, CJK, Devanagari, Polish or Turkish posting
+  ended the run with `UnicodeEncodeError` before any output reached the workflow; the key
+  audit, the salary lookup, the salary converter and the layout report failed the same way.
+  Each tool now switches stdout and stderr to UTF-8 at entry, which also stops Danish and
+  other Western accents from arriving as cp1252 bytes. The regression tests run every
+  tool in a child process with a cp1252 stdout forced through `PYTHONIOENCODING`, so the
+  Linux CI job reproduces the Windows failure; all seven fail without the fix. The
+  subprocess helpers in `tests/test_rank_state.py` and `tests/test_job_key.py` now decode
+  child output as UTF-8 to match.
+
+- **`/rank` rejects invalid score dimensions before updating an entry**
+  (`tools/rank_state.py`, `tests/test_rank_state.py`) - enforce the rubric's
+  inclusive 0-100 range and reject booleans, NaN, and infinities. Invalid results
+  now use the existing per-job error report, leaving the rejected entry intact
+  while valid results in the same batch are saved. CLI tests cover every score
+  dimension, oversized integers, boundary values, and fractional-score rounding.
+
+- **Distinct non-Latin company names no longer share the unknown-company job key**
+  (`tools/job_key.py`, `tests/test_job_key.py`) - when a non-empty company name
+  has no ASCII slug, derive its fallback from a hash of the normalized name.
+  Missing names retain `unknown-company`, and existing ASCII keys are unchanged.
+  CLI tests cover distinct companies, case and canonical Unicode equivalence,
+  and stable keys across posting URLs. Existing state is not rewritten; `/scrape`
+  already recognizes stored postings by URL regardless of their previous key.
+
+- **`/rank` tracker exclusion handles UTF-8 BOMs on reordered CSV headers**
+  (`tools/rank_state.py`, `tests/test_rank_state.py`) - when `company` or `role`
+  is the first column, a leading BOM becomes part of the header name and an
+  already-tracked application is selected for ranking again. Read with
+  `utf-8-sig` so both BOM-prefixed and plain UTF-8 trackers match correctly.
+  The standard `date`-first header already worked; regression coverage checks
+  all three column orders with and without a BOM.
+
+- **`/apply` Step 5b now actually runs the page-count check it claimed Step 5d ran**
+  (`.claude/commands/apply.md`, `tests/test_apply_page_count.py`) - the 5b prose said
+  "Page count is not checked here - that is `verify_pdf.py --pages`'s job, and Step 5d already
+  runs it", and `verify_layout.py`'s docstring declines to measure page count for the same
+  reason. Step 5d's only `verify_pdf.py` call is `--dump-text`, and no step in the workflow
+  passed `--pages` at all (only the upstream-only CI assertion on the stock examples does),
+  so the hard 2-page CV and 1-page cover letter limits were enforced by nothing but the
+  visual PDF read - the "measure first, then look" failure 5b was written to stop. 5b now
+  runs `verify_pdf.py --pages 2` on the CV and `--pages 1` on the cover letter ahead of
+  `verify_layout.py`, names the `ACTIVE-TEMPLATE` page limit as the substitute for a custom
+  template, and the deferral sentence points at those lines. Four spec tests pin the
+  invocations, their counts, their order relative to the layout measurement, and that no
+  prose defers the check to a step that does not run it; all four fail on master.
+
+- **`salary_lookup.py` prints the privacy footnote only when a row actually carries `N/A*`**
+  - the `* N/A = Too few employees to publish (privacy)` line was appended under every
+  category table, including one where every row has an index, so the output asserted a
+  suppression that never happened (the residual noted on #470). The footnote now follows a
+  flag set by the `N/A*` branch; a table with a suppressed row renders exactly as before.
+  Two `FormatEntryTests` cases pin both directions; the "omitted" one fails on master.
+
+- **`convert_salary_excel.py` pairs a bare `Count`/`Index` column pair instead of
+  splitting it, so `salary_lookup.py` no longer labels a published headcount as
+  privacy-suppressed** - the pairing loop required a non-empty derived category name on
+  both sides, but a header with no category word (`Count` + `Index`, Danish `Antal` +
+  `Lønindeks`) strips to an empty name, so the simplest layout the README advertises
+  ("auto-pairs count/index columns") came out as two unrelated standalone categories:
+  `{"count": {"count": 500}, "index": {"index": 108.5}}`. `salary_lookup` then rendered
+  a `Count  500  N/A*` row above an `Index  -  108.5` row, and the footnote read the
+  `N/A*` as "too few employees to publish (privacy)" - a false statement about a company
+  whose headcount is in the file, shown during `/apply`'s salary step. Demonstrated
+  through the documented Excel -> JSON -> lookup path with `openpyxl`; adding any suffix
+  (`Antal alle`) made pairing work, which is why the shipped tests, all suffixed, never
+  saw it. Bare pairs now pair under the README's top-level category name
+  (`all_employees`); a bare `Antal` with no bare index column still stays a standalone
+  count, and named pairs alongside are untouched. Four new cases in
+  `test_convert_salary_excel.py`, including one that renders the converter's output
+  through `salary_lookup.format_entry`; all four fail on the old pairing rule.
+
+- **`tools/verify_layout.py`'s `skipped:` message named only one cause of a broken
+  extractor when there are two** (#451) - it blamed the xpdf-based `pdftotext` Git for
+  Windows puts ahead of Poppler in PATH (no `-bbox` flag, exits 99), but a real Poppler
+  can abort `-bbox`/`-bbox-layout`/`-htmlmeta` too: Poppler 26.0x before 26.05 crashes on
+  any PDF whose Info dictionary carries an empty string in any field, and `hyperref`
+  writes exactly that for every field it does not set. A `lualatex`/`pdflatex` document
+  built with `hyperref` and no `\hypersetup{pdftitle=...}` - an ordinary `/add-template`
+  CV template, not a malformed one - hits this with a working Poppler installed, and the
+  old message sent the reader to check their PATH when nothing was wrong with it. The
+  message now names both causes; behavior is unchanged, degrading to `skipped:` exit 2
+  either way, since a broken extractor is still not a broken document.
+
+- **The template-placeholder guard in `test_setup_command.py` now skips on forks** (#463) -
+  `TemplatesStillCarryThePlaceholders` asserts that `05-cv-templates.md` and
+  `06-cover-letter-templates.md` still contain `[FIRST_NAME]`, `[LAST_NAME]`, `[YOUR_EMAIL]`,
+  `[YOUR_PHONE]`, `[YOUR_NAME]`, and `[YOUR_LINKEDIN_URL]`. Running `/setup` - the documented
+  path, and what Step 3.5/3.6 of that command exist to do - replaces exactly those tokens, so on
+  a personalized fork `python3 -m unittest discover -s tests` fails both checks permanently and
+  marks every push red. The class now uses the same `@unittest.skipIf` on `GITHUB_REPOSITORY`
+  (defaulting to upstream when unset, so local pristine-template runs still execute the guards)
+  that `test_placeholder_integrity.py` received in #407. The guard landed three days after that
+  fix and did not pick up the pattern; the `placeholder-integrity` CI job is upstream-gated and
+  does not cover the `05`/`06` tokens, so `python-tests` was their only check.
+- **`verify_pdf.py --contains` now sees through LaTeX's typographic substitutions and
+  the pdflatex text layer keeps accents precomposed** (Discussions #385, #384) - the
+  comparison folded whitespace only, but LaTeX ligatures `'` into U+2019 and `--` into
+  U+2013, so on the stock CV compiled with the documented `lualatex` command
+  `--contains "Master's degree"` and `--contains "2016-2024"` both reported the keyword
+  missing from a document that plainly contains it (measured through both extractors;
+  `Six Sigma` and `Statistics` on the same page passed). The documented remedy for a
+  missing keyword is to add it, so the false negative nudged toward the one thing the ATS
+  section forbids. `normalize_text()` now folds both sides - NFC, then curly
+  apostrophes/quotes to ASCII, en/em dashes to `-`, no-break space to space - at
+  comparison time only; `--dump-text` still writes the raw layer, because that is what an
+  ATS parses and the date-range rule in `05-cv-templates.md` needs the raw en-dash visible
+  there. Separately, pdflatex without T1 font encoding stores accents decomposed
+  (`e` + U+0300; pypdf reads it as a stray spacing accent), which NFC cannot fully
+  repair - moderncv 2.5 loads T1 itself under pdflatex but the apt-packaged 2.3.1 does
+  not, so `cv/main_example.tex` and the guide's preamble gain
+  `\ifpdftex\usepackage[T1]{fontenc}\fi`, a no-op on the lualatex path. Pinned by
+  ten new `test_verify_pdf.py` cases (the fold-through ones fail on the whitespace-only
+  code) and a `test_latex_guidance.py` guard that the line exists and stays
+  pdflatex-only. Reported and diagnosed by 9scorp4. Fork users: your
+  personalized `cv/main_example.tex` gains the one guarded preamble line on rebase (a clean
+  3-way merge unless you edited the preamble); tailored CVs compiled with lualatex need nothing.
+- **`jobdanmark-search detail` now backs off on 429/5xx like every other portal's detail
+  command** - the handler called `fetch()` directly instead of going through the CLI's own
+  request wrappers, so it carried none of the three things `apiFetch`/`apiPost` guarantee:
+  no 429/5xx retry loop (a rate-limited detail page wrote `API_ERROR` and exited after one
+  attempt, where jobnet, jobbank, jobindex, linkedin, and freehire all retry up to six
+  times), a hand-inlined User-Agent string that would drift from the exported `USER_AGENT`,
+  and a timeout the wrappers' tests never saw. `/scrape` calls `detail` once per
+  shortlisted posting, so a burst that tripped jobdanmark's rate limiter dropped those
+  postings outright - no description, no deadline - while the same burst on any other
+  portal rode it out. Demonstrated by driving the real command handler with a stubbed 429:
+  1 fetch attempt and exit 1 before, 7 attempts after (the contract's initial try plus six
+  retries). Fixed by adding `htmlFetch` to `helpers.ts` with the same backoff schedule,
+  timeout, and shared User-Agent as the JSON wrappers (404 returns `null` so `detail` keeps
+  its `NOT_FOUND` contract) and routing `detail` through it. Pinned in the existing
+  `retry-backoff`, `user-agent`, and `request-timeout` suites, which now cover all three
+  wrappers, plus a new `detail-backoff.test.ts` that exercises the handler path itself -
+  its retry cases fail against the bare `fetch()`.
+
+- **Free-form tracker notes no longer break the CSV row** (#454) (`.claude/commands/gmail-sync.md`,
+  `.claude/commands/outcome.md`, `tests/test_tracker_notes_csv_safe.py`) - two writers put
+  free-form text into the `notes` column of `job_search_tracker.csv`: `/gmail-sync` Step 7a
+  copied the raw subject of a received email, and `/outcome` Step 4 appended "a short dated
+  note" with no constraint on its content. No writer in the framework emits a quoted tracker
+  field, so an unescaped comma splits the row for a naive split and for `csv.DictReader` alike -
+  the latter being what the repo's only machine reader of the tracker uses
+  (`tools/rank_state.py`). `notes` is column 10 of 14, so a subject as ordinary as
+  `Re: Your application, Data Scientist`, or a note as natural as `rejected, no feedback given`,
+  shifted `cv_file`, `cover_letter_file` and `source` a column left. A line break is worse: it
+  ends the row and starts a second one. Nothing validated the row afterwards, and the
+  `/gmail-sync` half was written unattended, so the corruption was silent. Both append
+  instructions now carry the rule themselves - `/gmail-sync` deletes commas, double quotes and
+  line breaks from the subject, `/outcome` writes its note without them - rather than a general
+  note a writer can miss. Nothing is lost on the `/gmail-sync` side: Step 7a item 2 still
+  records the subject verbatim in the archive's `outcome.md`, which is Markdown and carries no
+  such constraint. The fixed-format writers (`followed up YYYY-MM-DD`,
+  `stale resolved no_response (YYYY-MM-DD)`, `redrafted`) could never contain these characters
+  and are unchanged.
+
+- **`jobindex-search detail` no longer fetches arbitrary URLs or invents posting-shaped
+  output** (#447) - the command fetched any `http(s)` input verbatim (no host check) and,
+  when the path didn't match its one pattern, silently used the whole input URL as the job
+  id; the only net was "the fetched page has a title", so a non-posting page came back as
+  a well-formed fake posting with exit 0 (demonstrated with jobindex's own homepage:
+  `id` = the URL, `title` = the site's tagline, `description` = navigation chrome). Every
+  other portal CLI rejects unparseable detail input with `BAD_ID` and constructs its fetch
+  URL from the extracted id; jobindex was the one CLI trusting the raw string - and
+  `/scrape`/`/rank` agents feed it stored URLs, so a ghost or redirected URL (the #331
+  class) yielded plausible garbage instead of an error. `buildUrl` now requires a
+  jobindex.dk host (apex or subdomain - look-alike and userinfo tricks rejected via real
+  URL parsing) plus a `/jobannonce/<id>` path, rebuilds the fetch URL from the extracted
+  id (the canonical short form the bare-id path always used), and exits 1 with the
+  stderr-JSON `BAD_ID` contract otherwise; bare ids stay permissive scheme- and
+  slash-free tokens (the jobnet precedent - the server 404s unknowns loudly). Pinned by
+  eight cases in the new `detail-input.test.ts`; the five rejection/canonicalization
+  cases fail against the verbatim unguarded extraction. Complementary to the `/apply`
+  host-check rule proposed in #431, which stays with its proposer.
+
+- **`/outcome` and `/interview` no longer confuse two roles at the same company** (#443)
+  (`.claude/commands/outcome.md`, `.claude/commands/interview.md`,
+  `tests/test_apply_records_application.py`) - when a tracker row's `cv_file` /
+  `cover_letter_file` columns are empty, both commands fell back to a company-prefix glob
+  (`cv/main_<company>*.tex`). Two roles at one company both match it, so `/outcome` copied
+  whichever the filesystem returned first into the archive as `cv_draft.tex` - the file whose
+  purpose is to record what was actually submitted - and its own "leave an existing archived
+  file" rule then made the wrong copy permanent. Both fallbacks now glob the full
+  `<company>_<role>` stem, derived by the **Subfolder naming** rule in `documents/README.md`
+  rather than restated, and skip with a note instead of widening the search. Dropping the
+  hardcoded `.tex` also makes a template registered by `/add-template` findable.
+
+- **`jobnet-search detail` no longer reports an externally hosted ad as not found** (#432) -
+  Jobnet's `/FindJob/JobAdDetails/<id>` returns 404 for ads with `isExternal: true`, so `detail`
+  on an ad `search` had just listed exited 1 with `NOT_FOUND`, and `/scrape` read the posting as
+  gone rather than hosted elsewhere (2 of 3 ads in a fresh sample). On that 404 the command now
+  falls back to the search endpoint, which does carry the ad's description and the external
+  application URL, and returns the record marked `isExternal: true` with a stderr note; fields the
+  search payload does not carry (`views`, `approvalStatus`, the boolean flags) are `null`, never
+  guessed. Verified live on two external ads.
+
+- **`09-web-research.md`'s curl snippets no longer write into the repo when `$SCRATCHPAD`
+  is unset** - both runnable blocks in the 403-escalation path start with `cd "$SCRATCHPAD"`,
+  and nothing in the repository ever sets that variable (`git grep 'SCRATCHPAD='` returns
+  nothing). Unset, it expands to `cd ""`, which succeeds and leaves the shell where it
+  started, so the `&&` chain proceeds and `curl -o page.html` writes to the working
+  directory - in practice the checkout, which is exactly what the paragraph directly beneath
+  the curl block forbids ("Write to the session scratchpad directory, never into the repo").
+  The file's instruction and its own snippet disagreed, and the snippet won silently.
+  Both expansions are now guarded with `${SCRATCHPAD:?...}`, turning a silent repo write into
+  an immediate failure whose message names where the value comes from. Behaviour is unchanged
+  wherever the variable is set. The same undefined reference in `.claude/commands/rank.md`
+  was removed by #425 as a side effect of rewriting Step 2/4; this is the remaining instance.
+
+- **`seen_jobs.json` keys are now a pure function of the posting** - `/scrape` Step 4 described
+  the key as prose (`"<url_or_company_title_key>"`) and nothing said how to derive it, so each
+  run slugified in its own way. Two failures followed, both observed in a live state file. Keys
+  carried characters that break the path they later become: `/apply` and `/outcome` derive an
+  archive folder from the same company+role pair, which is why `documents/README.md` has a
+  subfolder rule, and keys like `deloitte_junior-cybersecurity-analyst-(ot/iot)` and
+  `neverhack-estonia_penetration-tester-/-red-teamer` violate it. And the same posting was
+  stored twice when two runs truncated one title at different points
+  (`deloitte_cyber-intelligence-center-security-analy` and
+  `...-security-analyst-at` are one job, one URL, two entries) - which defeats the dedup the
+  file exists for. `tools/job_key.py` now owns the derivation: the slug is normalised, and
+  truncation is length-capped *and* disambiguated by a hash of the full slug, so a long title
+  always produces the same key and two long titles sharing a prefix cannot collide. Step 4
+  calls the helper instead of describing it. `--audit` reports non-conforming entries in an
+  existing state file and deliberately never rewrites them: stored keys are matched against
+  `job_search_tracker.csv` by company+role elsewhere, so a silent rewrite would break the link
+  between a stored job and its application record.
+  Existing state files need no migration: Step 2's candidate filter matches a posting to a stored
+  entry by URL regardless of that entry's key, so a workspace whose entries predate the helper does
+  not see its still-live postings re-presented as new.
+
 ## [1.7.1] - 2026-09-06
 
 ### Added
