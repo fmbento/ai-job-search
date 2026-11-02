@@ -1,5 +1,5 @@
 # Dependencies
-node_modules/
+node_modules
 bun.lock
 
 # Python
@@ -25,6 +25,8 @@ salary_data.json
 # its own directory, so these land at .claude/skills/job-scraper/job_scraper/*.
 # A rooted `job_scraper/...` pattern silently fails to match them.
 **/job_scraper/seen_jobs.json
+# Backups written by `tools/job_key.py --audit --migrate` hold the same history.
+**/job_scraper/seen_jobs.json.bak-*
 **/job_scraper/notion_sync.json
 **/job_scraper/*.md
 *_BehavioralReport.pdf
@@ -51,6 +53,7 @@ Thumbs.db
 
 # Memory files (Claude Code user-specific)
 .claude/projects/
+.claude/settings.local.json
 
 # Skills lock (auto-generated)
 skills-lock.json
@@ -112,7 +115,7 @@ company_research/*.json
 
 # Agent skills: track the source, ignore only deps and logs.
 # (A blanket `.agents/` ignore silently drops the job-search CLI skills from the repo.)
-.agents/**/node_modules/
+.agents/**/node_modules
 .agents/**/*.log
 .agents/usage/
 
