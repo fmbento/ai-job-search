@@ -66,10 +66,12 @@ skills-lock.json
 # and a wildcard negation (!cv/main_example.*) would also re-include build
 # artifacts like main_example.pdf/.aux.
 cv/main_*.*
+cv/FilipeBento_CV_*.*
 !cv/main_example.tex
 cv/*.txt
 cover_letters/cover_*.*
 cover_letters/Cover_*.*
+cover_letters/FilipeBento_CoverLetter_*.*
 !cover_letters/cover_example.tex
 
 # documents/ subfolder contents are personal — only README and folder structure are tracked

@@ -15,8 +15,11 @@ files and the example sources are the only place a test can catch them:
   characters" check and the agent is sent to "fix" a healthy document.
 """
 import re
+import subprocess
 import unittest
 from pathlib import Path
+
+from tests._pristine import file_is_pristine
 
 REPO = Path(__file__).resolve().parent.parent
 SKILL_DIR = REPO / ".claude" / "skills" / "job-application-assistant"
@@ -147,8 +150,8 @@ class TestPdflatexFontEncodingGuard(unittest.TestCase):
 
     GUARDED_FONTENC = re.compile(r"\\ifpdftex\s*\\usepackage\[T1\]\{fontenc\}\s*\\fi")
 
-    def assert_has_guarded_fontenc(self, path):
-        text = path.read_text(encoding="utf-8")
+    def assert_has_guarded_fontenc(self, path, text=None):
+        text = text if text is not None else path.read_text(encoding="utf-8")
         self.assertRegex(
             text,
             self.GUARDED_FONTENC,
@@ -170,7 +173,18 @@ class TestPdflatexFontEncodingGuard(unittest.TestCase):
         )
 
     def test_example_cv_guards_fontenc_for_pdflatex(self):
-        self.assert_has_guarded_fontenc(EXAMPLE_CV)
+        if file_is_pristine("cv/main_example.tex"):
+            self.assert_has_guarded_fontenc(EXAMPLE_CV)
+            return
+        # A personalized skip-worktree CV is not the tracked example template.
+        # Validate the versioned source without reading or changing local data.
+        head = subprocess.run(
+            ["git", "show", "HEAD:cv/main_example.tex"],
+            cwd=REPO,
+            check=True,
+            capture_output=True,
+        )
+        self.assert_has_guarded_fontenc(EXAMPLE_CV, head.stdout.decode("utf-8"))
 
     def test_cv_guide_preamble_guards_fontenc_for_pdflatex(self):
         self.assert_has_guarded_fontenc(CV_TEMPLATES)
@@ -182,15 +196,36 @@ class TestGeometryScaleAlignment(unittest.TestCase):
     GEOMETRY_SCALE = re.compile(r"\\usepackage\[scale=([0-9.]+)\]\{geometry\}")
 
     def test_cv_guide_and_example_cv_share_geometry_scale(self):
-        cv_match = self.GEOMETRY_SCALE.search(EXAMPLE_CV.read_text(encoding="utf-8"))
+        if file_is_pristine("cv/main_example.tex"):
+            cv_match = self.GEOMETRY_SCALE.search(EXAMPLE_CV.read_text(encoding="utf-8"))
+            guide_match = self.GEOMETRY_SCALE.search(CV_TEMPLATES.read_text(encoding="utf-8"))
+            self.assertIsNotNone(cv_match, "cv/main_example.tex must declare geometry scale")
+            self.assertIsNotNone(guide_match, "05-cv-templates.md must declare geometry scale")
+            self.assertEqual(
+                guide_match.group(1),
+                cv_match.group(1),
+                f"05-cv-templates.md geometry scale ({guide_match.group(1)}) must match "
+                f"cv/main_example.tex ({cv_match.group(1)})",
+            )
+            return
+        # A personalized skip-worktree CV is not the tracked example template:
+        # compare the guide against the versioned source instead of local data.
+        head = subprocess.run(
+            ["git", "show", "HEAD:cv/main_example.tex"],
+            cwd=REPO,
+            check=True,
+            capture_output=True,
+        )
+        head_text = head.stdout.decode("utf-8")
+        cv_match = self.GEOMETRY_SCALE.search(head_text)
         guide_match = self.GEOMETRY_SCALE.search(CV_TEMPLATES.read_text(encoding="utf-8"))
-        self.assertIsNotNone(cv_match, "cv/main_example.tex must declare geometry scale")
+        self.assertIsNotNone(cv_match, "HEAD cv/main_example.tex must declare geometry scale")
         self.assertIsNotNone(guide_match, "05-cv-templates.md must declare geometry scale")
         self.assertEqual(
             guide_match.group(1),
             cv_match.group(1),
             f"05-cv-templates.md geometry scale ({guide_match.group(1)}) must match "
-            f"cv/main_example.tex ({cv_match.group(1)})",
+            f"HEAD cv/main_example.tex ({cv_match.group(1)})",
         )
 
 

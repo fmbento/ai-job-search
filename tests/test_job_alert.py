@@ -146,9 +146,17 @@ class MoaiRssTests(unittest.TestCase):
         self.assertEqual(cards[1]["company"], "Cohere")
 
     def test_recent_pubdate_counts_as_fresh(self):
-        # The feed's absolute pubDate is converted to a relative age; these
-        # items are 1-2 days old, so they sit inside a 3-day window.
-        cards = job_alert.parse_moai_rss(MOAI_RSS)
+        # Derive recent fixture timestamps from now so this stays a valid
+        # 3-day-window test instead of aging out as the calendar advances.
+        now = datetime.datetime.now(datetime.timezone.utc)
+        xml = MOAI_RSS.replace(
+            "Fri, 04 Sep 2026 22:13:05 GMT",
+            (now - datetime.timedelta(days=1)).strftime("%a, %d %b %Y %H:%M:%S GMT"),
+        ).replace(
+            "Fri, 04 Sep 2026 21:00:00 GMT",
+            (now - datetime.timedelta(days=2)).strftime("%a, %d %b %Y %H:%M:%S GMT"),
+        )
+        cards = job_alert.parse_moai_rss(xml)
         self.assertIsNotNone(cards[0]["date"])
         fresh, _ = job_alert.classify(cards, job_alert.keyword_pattern(["llm", "research"]), 3)
         self.assertEqual(len(fresh), 1)  # only the Research Engineer matches

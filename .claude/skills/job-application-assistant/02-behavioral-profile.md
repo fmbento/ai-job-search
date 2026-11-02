@@ -23,11 +23,19 @@ framework_version: 1.0.0
 - **[BEHAVIOR_1]:** [DESCRIPTION]
 - **[BEHAVIOR_2]:** [DESCRIPTION]
 - **[BEHAVIOR_3]:** [DESCRIPTION]
+- **Cross-functional translation:** Bridges technical and non-technical perspectives across researchers, curators, historians, engineers, customers, and leadership *(Inferred from British Library, Alan Turing Institute, and EBSCO experience — review before relying on this)*
+- **Delivery under pressure:** Maintains focus and follows through on time-critical, high-volume delivery, including the British Library's 18,000-map COVID delivery *(Inferred from British Library CEO recognition and appraisal evidence — review before relying on this)*
+- **Practical, user-centered problem solving:** Starts from user and stakeholder needs, then translates them into workable services, workflows, training, and technical solutions *(Inferred from EBSCO customer work, library-platform integrations, and Universidade de Aveiro user-support leadership — review before relying on this)*
+- **Knowledge sharing and enablement:** Builds capability through documentation, onboarding, workshops, and mentoring across distributed teams and academic communities *(Inferred from EBSCO engineering leadership and Universidade de Aveiro training — review before relying on this)*
+- **Team-first leadership and developing people:** Colleagues and direct reports describe a manager who shares information openly, "educates" those around him, and measures success by the team's success; delivery under tight deadlines is noted repeatedly *(Inferred from public LinkedIn recommendations — documents/interviews/linkedin_recommendations_talking_points.md — review before relying on this)*
 
 ## How You Work Best
 - [ENVIRONMENT_PREFERENCE_1]
 - [ENVIRONMENT_PREFERENCE_2]
 - [ENVIRONMENT_PREFERENCE_3]
+- Collaborative, multidisciplinary environments where technical work stays connected to researchers, users, and organizational outcomes *(Inferred from British Library, Alan Turing Institute, EBSCO, and Universidade de Aveiro experience — review before relying on this)*
+- Roles combining hands-on technical delivery with service improvement, stakeholder communication, and knowledge sharing *(Inferred from the EBSCO service portfolio and current digital-transformation role — review before relying on this)*
+- Mission-driven settings involving access to knowledge, research infrastructure, digital scholarship, or public services *(Inferred from career history and INA public-sector leadership training — review before relying on this)*
 
 ## Growth Areas (frame positively in applications)
 - **[AREA_1]:** [HOW_TO_FRAME_IT_POSITIVELY]
